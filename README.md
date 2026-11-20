@@ -55,7 +55,12 @@
   - 步数：一源用 `A8`（`[1..4]` 大端），另一源用 `D8`（今日统计，逐字节布局未公开）。
 - 命令间隔 ~120–200ms（官方 App 节奏，太短会丢包）；每包固定 20 字节补齐。
 
-## v0.2 修复说明（2026-11-20 二次实测后）
+## v0.3 修复说明（2026-11-20 三次实测后 · 真凶）
+- v0.2 日志出现 `写跳过：gatt/写特征为空`，且 CCCD(status=0)、订阅全成功但命令一条没写出去。
+- 🔴 **真正根因（我 v0.2 诊断错了一层，认）**：`connectBestAndSync()` 里 `dev.connectGatt(...)` 的返回值**从未赋给成员 `gatt`**。服务发现/CCCD 订阅全走回调参数 `g`，所以一路绿灯；但 `writeRaw()` 检查的是成员 `gatt`（恒 null）→ 四条命令在 v0.1 静默 return、v0.2 打"写跳过"。**跟 Write Request/Write Command 无关**，v0.2 改的写类型是无害的保留项。
+- 修复：`gatt = dev.connectGatt(...)` + 在 onConnectionStateChange / onServicesDiscovered 回调里用参数 `g` 二次赋值兜底。加 `connectGatt 返回值=有效✅` 日志。版本升 v0.3。
+
+## v0.2 修复说明（2026-11-20 二次实测后 · 非根因）
 - 第一次实测日志：F008 服务✅、CCCD 订阅 `onDescriptorWrite status=0`✅、握手包字节正确✅，但 0 notify、且全程无 `onCharacteristicWrite` 回调。
 - 定位：Veepoo/S226 协议原文（Grumbel/S226 PROTOCOL.md）明确——命令用 **Write Command（无应答，WRITE_TYPE_NO_RESPONSE）**，CCCD 才用 Write Request。原代码未设 writeType，Android 默认成需应答的 Write Request，设备不回 response，导致命令回调永不触发、也不回数据。
 - 修复：① `writeRaw()` 显式设 `WRITE_TYPE_NO_RESPONSE`；② 握手包 offset[13] 由 0 改为 0x04（H-Band 抓包原文 `01 01 04`）；③ 加长命令间隔、finishSync 延到 5.5s；④ 写返回值/writeType 全打日志。
