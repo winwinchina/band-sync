@@ -1,0 +1,12 @@
+// Top-level build file
+// 注意：仓库统一在 settings.gradle 的 dependencyResolutionManagement 声明，
+// 这里禁止再写 project 级 repositories，否则触发 FAIL_ON_PROJECT_REPOS 构建失败。
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.1.4'
+    }
+}

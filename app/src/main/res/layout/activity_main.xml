@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="vertical"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="16dp">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="BandSync · Z60 一键同步（诊断版 v0.1）"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:paddingBottom="8dp" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="使用前：彻底退出 H-Band / 在系统蓝牙设置里忘掉手表配对。\n点「扫描」找到手表 → 点「连接并同步」。"
+        android:textSize="12sp"
+        android:textColor="#666666"
+        android:paddingBottom="12dp" />
+
+    <LinearLayout
+        android:orientation="horizontal"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+        <Button
+            android:id="@+id/btnScan"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:text="1 扫描" />
+        <Button
+            android:id="@+id/btnSync"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:text="2 连接并同步" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/txtDevices"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="设备列表："
+        android:textSize="13sp"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:background="#F5F5F5">
+        <TextView
+            android:id="@+id/txtLog"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="12sp"
+            android:padding="8dp" />
+    </ScrollView>
+
+    <Button
+        android:id="@+id/btnCopy"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="复制日志/CSV 路径" />
+
+</LinearLayout>
