@@ -270,7 +270,8 @@ public class MainActivity extends Activity {
 
         @Override
         public void onCharacteristicWrite(BluetoothGatt g, BluetoothGattCharacteristic c, int status) {
-            log("命令写入回调 status=" + status + (status == BluetoothGatt.GATT_SUCCESS ? " ✅" : " ❌"));
+            log("命令写入回调 status=" + status + " 特征=" + c.getUuid()
+                    + (status == BluetoothGatt.GATT_SUCCESS ? " ✅" : " ❌"));
         }
 
         @Override
@@ -286,12 +287,12 @@ public class MainActivity extends Activity {
 
     // ---------- 命令 ----------
     void startCommands() {
-        log("---- 订阅已处理，开始发命令 ----");
-        handler.postDelayed(() -> cmdHandshake(), 300);
-        handler.postDelayed(() -> cmd("A0", "读电量"), 800);
-        handler.postDelayed(() -> cmd("A8", "读步数A8"), 1300);
-        handler.postDelayed(() -> cmd("D8", "读今日统计D8"), 1800);
-        handler.postDelayed(() -> finishSync(), 3200);
+        log("---- 订阅已处理，开始发命令（Write Command 无应答模式）----");
+        handler.postDelayed(() -> cmdHandshake(), 400);
+        handler.postDelayed(() -> cmd("A0", "读电量"), 1300);
+        handler.postDelayed(() -> cmd("A8", "读步数A8"), 2100);
+        handler.postDelayed(() -> cmd("D8", "读今日统计D8"), 2900);
+        handler.postDelayed(() -> finishSync(), 5500);
     }
 
     void cmdHandshake() {
@@ -309,6 +310,7 @@ public class MainActivity extends Activity {
         p[10] = (byte) c.get(Calendar.SECOND);
         p[11] = 0x01;                              // 24 小时制
         p[12] = 0x01;
+        p[13] = 0x04;                              // profile byte：H-Band 抓包原文为 01 01 04，固件可能需要
         log("▶ 握手 " + hex(p));
         writeRaw(p);
     }
@@ -321,9 +323,13 @@ public class MainActivity extends Activity {
     }
 
     void writeRaw(byte[] p) {
-        if (gatt == null || writeChar == null) return;
+        if (gatt == null || writeChar == null) { log("⚠️ 写跳过：gatt/写特征为空"); return; }
+        // 关键修复：Veepoo 协议的命令走 Write Command（NO_RESPONSE），不是需要应答的 Write Request。
+        // 设备不会对 Write Request 回 response，导致 onCharacteristicWrite 永不回调、也不回数据。
+        writeChar.setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE);
         writeChar.setValue(p);
         boolean ok = gatt.writeCharacteristic(writeChar);
+        log("   写命令发起 ok=" + ok + " writeType=" + writeChar.getWriteType() + "(1=NO_RESPONSE)");
         if (!ok) log("⚠️ 写特征失败（可能上次写未完成）");
     }
 
@@ -382,10 +388,11 @@ public class MainActivity extends Activity {
             log("❌ 写 CSV 失败：" + e.getMessage());
         }
         if (notifyPackets.isEmpty()) {
-            log("⚠️ 没收到任何 notify —— 对照上面三行诊断：");
-            log("   ① onDescriptorWrite status=0 ✅ 才说明订阅成功；非0 就是订阅失败");
-            log("   ② 命令写入回调 status=0 ✅ 才说明命令发出去了");
-            log("   ③ 若订阅+写入都✅仍无回包：多半手表休眠（点亮屏幕重试）或该表回包走 indicate 非 notify");
+            log("⚠️ 没收到任何 notify —— 对照诊断：");
+            log("   ① onDescriptorWrite status=0 ✅ = 订阅成功");
+            log("   ② 命令写入回调 status=0 ✅ = 命令写出去了（本次已改 Write Command 无应答模式）");
+            log("   ③ 写命令发起 ok=true = 写入动作成功入队");
+            log("   ④ 若三项都✅仍无回包：点亮手表屏幕重试；仍不行则该表需密码握手包 profile 字节再调");
         }
         if (gatt != null) { gatt.disconnect(); gatt.close(); gatt = null; }
     }
