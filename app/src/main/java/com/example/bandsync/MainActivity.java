@@ -37,7 +37,7 @@ import java.util.UUID;
 
 /**
  * BandSync v0.1 —— 诊断版最小 BLE 客户端
- * 目标：确认 Z60 是否跑 Veepoo/S226 协议；能读到数据就写成 CSV。
+ * 目标：确认 Z06 是否跑 Veepoo/S226 协议；能读到数据就写成 CSV。
  * 前提：使用Veepoo方案的F008服务。若扫不到该服务，日志会明确提示“非Veepoo”。
  */
 public class MainActivity extends Activity {
@@ -233,21 +233,46 @@ public class MainActivity extends Activity {
                 return;
             }
 
-            // 开通知
-            g.setCharacteristicNotification(notifyChar, true);
+            // 打印特征属性，帮助判断 write/notify 是否选反
+            log("写特征属性=" + writeChar.getProperties() + "，通知特征属性=" + notifyChar.getProperties());
+
+            // 开通知：先本地允许，再写 CCCD。必须等 onDescriptorWrite 回调成功后再发命令，
+            // 否则订阅未生效，设备即使回了数据也不会触发 notify。
+            boolean localOk = g.setCharacteristicNotification(notifyChar, true);
+            log("setCharacteristicNotification=" + localOk);
             BluetoothGattDescriptor cccd = notifyChar.getDescriptor(UUID_CCCD);
+            log("CCCD descriptor=" + (cccd == null ? "不存在" : "存在"));
             if (cccd != null) {
                 cccd.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
-                g.writeDescriptor(cccd);
-                log("已启用 notify (CCCD)");
+                cccd.setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT);
+                boolean wr = g.writeDescriptor(cccd);
+                log("writeDescriptor 发起=" + wr + "（真正启用要等 onDescriptorWrite 回调）");
+                if (!wr) log("❌ CCCD 写入发起失败，notify 不会通");
+            } else {
+                log("⚠️ 通知特征没有 CCCD —— 可能特征选反了，兜底对写特征开通知");
+                g.setCharacteristicNotification(writeChar, true);
+                BluetoothGattDescriptor d2 = writeChar.getDescriptor(UUID_CCCD);
+                if (d2 != null) {
+                    d2.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
+                    d2.setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT);
+                    log("兜底 writeDescriptor(写特征CCCD)=" + g.writeDescriptor(d2));
+                } else {
+                    log("❌ 两个特征都没有 CCCD，无法启用 notify");
+                }
             }
+            // 命令不在此时发，改到 onDescriptorWrite 回调里发
+        }
 
-            // 依次发命令：握手 -> 电量 -> 步数a8 -> 步数d8，间隔 200ms
-            handler.postDelayed(() -> cmdHandshake(), 400);
-            handler.postDelayed(() -> cmd("A0", "读电量"), 900);
-            handler.postDelayed(() -> cmd("A8", "读步数A8"), 1400);
-            handler.postDelayed(() -> cmd("D8", "读今日统计D8"), 1900);
-            handler.postDelayed(() -> finishSync(), 3200);
+        @Override
+        public void onDescriptorWrite(BluetoothGatt g, BluetoothGattDescriptor d, int status) {
+            boolean ok = (status == BluetoothGatt.GATT_SUCCESS);
+            log("onDescriptorWrite status=" + status + (ok ? " ✅ notify 已真正启用" : " ❌ notify 启用失败"));
+            startCommands();
+        }
+
+        @Override
+        public void onCharacteristicWrite(BluetoothGatt g, BluetoothGattCharacteristic c, int status) {
+            log("命令写入回调 status=" + status + (status == BluetoothGatt.GATT_SUCCESS ? " ✅" : " ❌"));
         }
 
         @Override
@@ -262,6 +287,15 @@ public class MainActivity extends Activity {
     };
 
     // ---------- 命令 ----------
+    void startCommands() {
+        log("---- 订阅已处理，开始发命令 ----");
+        handler.postDelayed(() -> cmdHandshake(), 300);
+        handler.postDelayed(() -> cmd("A0", "读电量"), 800);
+        handler.postDelayed(() -> cmd("A8", "读步数A8"), 1300);
+        handler.postDelayed(() -> cmd("D8", "读今日统计D8"), 1800);
+        handler.postDelayed(() -> finishSync(), 3200);
+    }
+
     void cmdHandshake() {
         byte[] p = new byte[20];
         p[0] = (byte) 0xA1;
@@ -350,7 +384,10 @@ public class MainActivity extends Activity {
             log("❌ 写 CSV 失败：" + e.getMessage());
         }
         if (notifyPackets.isEmpty()) {
-            log("⚠️ 没收到任何 notify —— 可能：H-Band 没退干净 / 手表没唤醒 / 密码不是0000。");
+            log("⚠️ 没收到任何 notify —— 对照上面三行诊断：");
+            log("   ① onDescriptorWrite status=0 ✅ 才说明订阅成功；非0 就是订阅失败");
+            log("   ② 命令写入回调 status=0 ✅ 才说明命令发出去了");
+            log("   ③ 若订阅+写入都✅仍无回包：多半手表休眠（点亮屏幕重试）或该表回包走 indicate 非 notify");
         }
         if (gatt != null) { gatt.disconnect(); gatt.close(); gatt = null; }
     }
