@@ -195,22 +195,26 @@ public class MainActivity extends Activity {
         BluetoothDevice dev = found.get(pick).getDevice();
         deviceName = dev.getName() == null ? "unknown" : dev.getName();
         log("---- 连接：" + deviceName + " (" + dev.getAddress() + ") ----");
-        dev.connectGatt(this, false, gattCb);
+        // 关键修复：必须把 connectGatt 的返回值赋给成员 gatt，否则 writeRaw 里 gatt 恒为 null，命令全部写跳过。
+        gatt = dev.connectGatt(this, false, gattCb);
+        log("connectGatt 返回值=" + (gatt == null ? "null ❌" : "有效 ✅"));
     }
 
     BluetoothGattCallback gattCb = new BluetoothGattCallback() {
         @Override
         public void onConnectionStateChange(BluetoothGatt g, int status, int newState) {
+            gatt = g;
             if (newState == BluetoothProfile.STATE_CONNECTED) {
                 log("✅ BLE 已连接，开始找服务…");
                 g.discoverServices();
             } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
-                log("已断开 status=" + status);
+                log("已断开 status=" + status + "（gatt 实例已记下）");
             }
         }
 
         @Override
         public void onServicesDiscovered(BluetoothGatt g, int status) {
+            gatt = g;
             if (status != BluetoothGatt.GATT_SUCCESS) { log("❌ 发现服务失败 status=" + status); return; }
             boolean hasF008 = false;
             for (BluetoothGattService s : g.getServices()) {
