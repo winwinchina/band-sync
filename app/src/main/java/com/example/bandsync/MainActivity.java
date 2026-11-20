@@ -85,9 +85,9 @@ public class MainActivity extends Activity {
             connectBestAndSync();
         });
         findViewById(R.id.btnCopy).setOnClickListener(v -> {
-            String path = csvPath();
-            toast("CSV 目录：" + path.getParent());
-            log("CSV 完整路径：" + path);
+            File csvFile = csvPath();
+            toast("CSV 目录：" + csvFile.getParent());
+            log("CSV 完整路径：" + csvFile.getAbsolutePath());
         });
 
         log("准备就绪。第一步先点「1 扫描」。");
@@ -337,7 +337,7 @@ public class MainActivity extends Activity {
         // 结构化 CSV：一行一次同步；raw 列保留诊断
         String row = ts + "," + esc(deviceName) + "," + notifyPackets.size() + "," + esc(raw) + "\n";
         try {
-            File f = new File(csvPath());
+            File f = csvPath();
             f.getParentFile().mkdirs();
             boolean newFile = !f.exists();
             FileOutputStream fos = new FileOutputStream(f, true);
