@@ -244,7 +244,6 @@ public class MainActivity extends Activity {
             log("CCCD descriptor=" + (cccd == null ? "不存在" : "存在"));
             if (cccd != null) {
                 cccd.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
-                cccd.setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT);
                 boolean wr = g.writeDescriptor(cccd);
                 log("writeDescriptor 发起=" + wr + "（真正启用要等 onDescriptorWrite 回调）");
                 if (!wr) log("❌ CCCD 写入发起失败，notify 不会通");
@@ -254,7 +253,6 @@ public class MainActivity extends Activity {
                 BluetoothGattDescriptor d2 = writeChar.getDescriptor(UUID_CCCD);
                 if (d2 != null) {
                     d2.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
-                    d2.setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT);
                     log("兜底 writeDescriptor(写特征CCCD)=" + g.writeDescriptor(d2));
                 } else {
                     log("❌ 两个特征都没有 CCCD，无法启用 notify");
